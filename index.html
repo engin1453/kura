@@ -1,13 +1,34 @@
+Harika! İhtiyacımız olan tüm bilgileri (Firebase Config) ekranda net bir şekilde görüyorum. Sizin için bu bilgileri doğrudan koda yerleştirdim, böylece kopyala-yapıştır yaparken hata yaşama riskini sıfırlamış olduk.
+
+Ancak kodun sorunsuz çalışabilmesi için **Realtime Database** (Veritabanı) kurulumunu da eksiksiz tamamlamamız gerekiyor. Ekran görüntüsündeki bilgilere dayanarak veritabanı adresiniz otomatik olarak `https://kura-bf13a-default-rtdb.firebaseio.com` olacaktır.
+
+Aşağıdaki adımı kontrol ettikten sonra hazır kodunuzu kullanabilirsiniz:
+
+### 🛑 Önemli Kontrol: Veritabanını Aktif Ettiniz mi?
+
+Eğer henüz yapmadıysanız, ekranın sol tarafındaki menüden sırasıyla şunları yapın:
+
+1. **"Veritabanları ve Depolama"** seçeneğine tıklayın.
+2. Açılan menüden **"Realtime Database"** seçeneğini seçin.
+3. **"Veritabanı Oluştur"** (Create Database) butonuna basın ve adımları ilerletirken mutlaka **"Test modunda başlat"** (Start in test mode) seçeneğini işaretleyip kaydedin.
+
+---
+
+### 🚀 Tamamen Hazır Kura Sistemi Kodunuz
+
+Aşağıdaki kodun içerisine sizin ekran görüntünüzdeki `apiKey`, `authDomain`, `projectId` gibi tüm benzersiz anahtarlarınızı yerleştirdim. Bu kodu doğrudan kopyalayıp projenizin `index.html` dosyasına yapıştırabilir ve Vercel'e yükleyerek hemen kullanmaya başlayabilirsiniz:
+
+```html
 <!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kura Katılım ve Çekiliş Sistemi</title>
+    <title>Canlı Kura Katılım ve Çekiliş Sistemi</title>
     <style>
         :root {
             --primary-color: #0070f3;
-            --success-color: #0070f3;
+            --success-color: #27ae60;
             --secondary-color: #ff0070;
             --background-color: #fafafa;
             --card-background: #ffffff;
@@ -87,11 +108,8 @@
             margin-bottom: 10px;
         }
 
-        button:hover {
-            opacity: 0.9;
-        }
-
-        .btn-register { background-color: var(--success-color); }
+        button:hover { opacity: 0.9; }
+        .btn-register { background-color: var(--primary-color); }
         .btn-draw { background-color: var(--secondary-color); }
         .btn-clear { background-color: #666; font-size: 12px; padding: 8px; }
 
@@ -118,12 +136,7 @@
             animation: fadeIn 0.5s ease;
         }
 
-        .winner-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-
+        .winner-list { list-style: none; padding: 0; margin: 0; }
         .winner-list li {
             padding: 12px;
             background: var(--card-background);
@@ -135,14 +148,9 @@
             align-items: center;
         }
 
-        .winner-info {
-            display: flex;
-            flex-direction: column;
-        }
-
+        .winner-info { display: flex; flex-direction: column; }
         .winner-name { font-weight: bold; }
         .winner-phone { font-size: 12px; color: #888; margin-top: 2px; }
-
         .winner-badge {
             background: var(--secondary-color);
             color: white;
@@ -157,6 +165,9 @@
             to { opacity: 1; transform: translateY(0); }
         }
     </style>
+
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
 </head>
 <body>
 
@@ -183,7 +194,7 @@
     <h3>⚙️ Kura Yönetim Paneli</h3>
     
     <div class="counter-badge">
-        Şu Anki Toplam Katılımcı: <span id="participantCount">0</span> Kişi
+        Canlı Toplam Katılımcı: <span id="participantCount">0</span> Kişi
     </div>
 
     <div class="form-group">
@@ -192,7 +203,7 @@
     </div>
 
     <button onclick="drawLottery()" class="btn-draw">🎰 Kurayı Çek!</button>
-    <button onclick="clearList()" class="btn-clear">Listeyi Sıfırla (Yeni Kura)</button>
+    <button onclick="clearList()" class="btn-clear">Veritabanını Sıfırla (Yeni Kura)</button>
 
     <div class="result-container" id="resultBox">
         <h3>🏆 Şanslı Kazananlar</h3>
@@ -201,86 +212,94 @@
 </div>
 
 <script>
-    // Sayfa yüklendiğinde mevcut katılımcı sayısını güncelle
-    document.addEventListener("DOMContentLoaded", () => {
-        updateCounter();
+    // Görselinizden aldığım Firebase bilgileriniz entegre edildi:
+    const firebaseConfig = {
+        apiKey: "AIzaSyDstZ_LU5ryyA95XaA25VH_BuAjji4ZFjs",
+        authDomain: "kura-bf13a.firebaseapp.com",
+        databaseURL: "https://kura-bf13a-default-rtdb.firebaseio.com",
+        projectId: "kura-bf13a",
+        storageBucket: "kura-bf13a.firebasestorage.app",
+        messagingSenderId: "627986543662",
+        appId: "1:627986543662:web:95102be456cf5c6768dbbf"
+    };
+
+    // Firebase'i Başlat
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+    
+    let allParticipants = [];
+
+    // Veritabanını canlı dinleme
+    database.ref('participants').on('value', (snapshot) => {
+        allParticipants = [];
+        const data = snapshot.val();
+        
+        if (data) {
+            Object.keys(data).forEach(key => {
+                allParticipants.push(data[key]);
+            });
+        }
+        
+        document.getElementById("participantCount").innerText = allParticipants.length;
     });
 
-    // Katılımcıları yerel hafızadan (localStorage) al
-    function getParticipants() {
-        const data = localStorage.getItem("lottery_participants");
-        return data ? JSON.parse(data) : [];
-    }
-
-    // Sayaç güncelleme fonksiyonu
-    function updateCounter() {
-        const participants = getParticipants();
-        document.getElementById("participantCount").innerText = participants.length;
-    }
-
-    // Kullanıcı Kaydetme Fonksiyonu
+    // Kullanıcı Kaydı
     function registerUser(event) {
         event.preventDefault();
         
         const fullName = document.getElementById("fullName").value.trim();
         const phoneNumber = document.getElementById("phoneNumber").value.trim();
 
-        let participants = getParticipants();
-
-        // Aynı numarayla mükerrer kaydı önlemek için kontrol (İsteğe bağlı)
-        const isAlreadyRegistered = participants.some(p => p.phone === phoneNumber);
+        // Mükerrer numara kontrolü
+        const isAlreadyRegistered = allParticipants.some(p => p.phone === phoneNumber);
         if (isAlreadyRegistered) {
             alert("Bu telefon numarası ile daha önce kayıt yapılmış!");
             return;
         }
 
-        // Yeni katılımcıyı listeye ekle
-        participants.push({ name: fullName, phone: phoneNumber });
-        localStorage.setItem("lottery_participants", JSON.stringify(participants));
-
-        alert("Tebrikler, kaydınız başarıyla alındı! 🎉");
-        
-        // Formu temizle ve sayacı güncelle
-        document.getElementById("registrationForm").reset();
-        updateCounter();
+        database.ref('participants').push({
+            name: fullName,
+            phone: phoneNumber,
+            timestamp: Date.now()
+        }).then(() => {
+            alert("Tebrikler, kaydınız başarıyla alındı! 🎉");
+            document.getElementById("registrationForm").reset();
+        }).catch((error) => {
+            alert("Hata oluştu: " + error.message);
+        });
     }
 
-    // Kura Çekme Fonksiyonu
+    // Kura Çekimi
     function drawLottery() {
-        let participants = getParticipants();
         const winnerCountInput = document.getElementById("winnerCount");
         const count = parseInt(winnerCountInput.value) || 1;
         const resultBox = document.getElementById("resultBox");
         const winnersUl = document.getElementById("winners");
 
-        if (participants.length === 0) {
-            alert("Sistemde henüz kayıtlı katılımcı yok!");
+        if (allParticipants.length === 0) {
+            alert("Veritabanında henüz kayıtlı katılımcı yok!");
             return;
         }
 
-        if (count > participants.length) {
-            alert(`Kazanacak kişi sayısı (${count}), toplam katılımcı sayısından (${participants.length}) fazla olamaz!`);
+        if (count > allParticipants.length) {
+            alert(`Kazanacak kişi sayısı (${count}), toplam katılımcı sayısından (${allParticipants.length}) fazla olamaz!`);
             return;
         }
 
-        winnersUl.innerHTML = "<li>Kurallı çark dönüyor... 🎲</li>";
+        winnersUl.innerHTML = "<li>Canlı veritabanından kura çekiliyor... 🎲</li>";
         resultBox.classList.add('active');
 
-        // 1.5 saniyelik heyecan efekti
         setTimeout(() => {
             winnersUl.innerHTML = "";
             let winners = [];
-            
-            // Katılımcı dizisinin kopyasını oluştur (orijinal liste bozulmasın diye)
-            let pool = [...participants];
+            let pool = [...allParticipants];
 
             for (let i = 0; i < count; i++) {
                 const randomIndex = Math.floor(Math.random() * pool.length);
                 winners.push(pool[randomIndex]);
-                pool.splice(randomIndex, 1); // Aynı kişi iki kez çıkmasın
+                pool.splice(randomIndex, 1);
             }
 
-            // Sonuçları ekrana bas
             winners.forEach((winner, index) => {
                 const li = document.createElement('li');
                 li.innerHTML = `
@@ -295,16 +314,18 @@
         }, 1500);
     }
 
-    // Listeyi Tamamen Sıfırlama Fonksiyonu
+    // Veritabanı Sıfırlama
     function clearList() {
-        if (confirm("Tüm katılımcı listesini silmek istediğinize emin misiniz? Bu işlem geri alınamaz.")) {
-            localStorage.removeItem("lottery_participants");
-            updateCounter();
-            document.getElementById("resultBox").classList.remove('active');
-            alert("Katılımcı listesi sıfırlandı!");
+        if (confirm("Veritabanındaki TÜM KATILIMCILARI silmek istediğinize emin misiniz? Bu işlem geri alınamaz!")) {
+            database.ref('participants').remove().then(() => {
+                document.getElementById("resultBox").classList.remove('active');
+                alert("Tüm katılımcı listesi başarıyla sıfırlandı!");
+            });
         }
     }
 </script>
 
 </body>
 </html>
+
+```
